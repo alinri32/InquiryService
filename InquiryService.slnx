@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/InquiryService.Api/InquiryService.Api.csproj" />
+    <Project Path="src/InquiryService.Application/InquiryService.Application.csproj" />
+    <Project Path="src/InquiryService.Domain/InquiryService.Domain.csproj" />
+    <Project Path="src/InquiryService.Infrastructure/InquiryService.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/InquiryService.UnitTests/InquiryService.UnitTests.csproj" />
+  </Folder>
+</Solution>
