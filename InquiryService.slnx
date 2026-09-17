@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/sql/">
+    <File Path="../../Documents/SQL Server Management Studio 22/InquiryDb.sql" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/InquiryService.Api/InquiryService.Api.csproj" />
     <Project Path="src/InquiryService.Application/InquiryService.Application.csproj" />
