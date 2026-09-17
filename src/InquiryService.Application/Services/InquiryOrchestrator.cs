@@ -170,7 +170,10 @@ public class InquiryOrchestrator : IInquiryOrchestrator
         var finalResponse = MapToDto(currentInquiry, isFromCache: false);
         return currentInquiry.Status == InquiryStatus.Completed
             ? ApiResponse<InquiryResponseDto>.Ok(finalResponse)
-            : ApiResponse<InquiryResponseDto>.Fail(currentInquiry.ErrorMessage ?? "عملیات استعلام ناموفق بود.", new[] { currentInquiry.ErrorMessage ?? string.Empty });
+            : ApiResponse<InquiryResponseDto>.Fail(
+                currentInquiry.ErrorMessage ?? "عملیات استعلام ناموفق بود.",
+                [currentInquiry.ErrorMessage ?? string.Empty],
+                finalResponse);
     }
 
     private static InquiryResponseDto MapToDto(Inquiry entity, bool isFromCache) => new(

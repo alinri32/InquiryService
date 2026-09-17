@@ -14,10 +14,11 @@ public class ApiResponse<T>
         Message = message
     };
 
-    public static ApiResponse<T> Fail(string message, IEnumerable<string>? errors = null) => new()
+    public static ApiResponse<T> Fail(string message, IEnumerable<string>? errors = null, T? data = default) => new()
     {
         Success = false,
         Message = message,
-        Errors = errors
+        Errors = errors,
+        Data = data
     };
 }
