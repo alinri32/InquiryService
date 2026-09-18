@@ -26,24 +26,36 @@ public class InquiryOrchestrator : IInquiryOrchestrator
     }
 
     public async Task<ApiResponse<InquiryResponseDto>> ProcessInquiryAsync(
+        string idempotencyKey,
         InquiryRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        // ۱. اعتبارسنجی ورودی
+        // ۱. اعتبارسنجی کلید ارسال‌شده در هدر
+        if (string.IsNullOrWhiteSpace(idempotencyKey))
+        {
+            return ApiResponse<InquiryResponseDto>.Fail("هدر 'Idempotency-Key' الزامی است.");
+        }
+
+        if (idempotencyKey.Length > 64)
+        {
+            return ApiResponse<InquiryResponseDto>.Fail("طول 'Idempotency-Key' نمی‌تواند بیشتر از ۶۴ کاراکتر باشد.");
+        }
+
+        // ۲. اعتبارسنجی بدنه درخواست
         var (isValid, validationError) = request.Validate();
         if (!isValid)
         {
             return ApiResponse<InquiryResponseDto>.Fail(validationError!);
         }
 
-        // ۲. بررسی کلید کش بیزینسی بر اساس مشخصه استعلام (اگر Bypass فعال نباشد)
+        // ۳. بررسی کلید کش بیزینسی بر اساس مشخصه استعلام
         string cacheKey = $"inquiry:{request.InquiryType}:{request.IdentityIdentifier}";
         var cachedPayload = await _cacheService.GetAsync(cacheKey, request.BypassCache);
         if (cachedPayload != null)
         {
             var cachedResponse = new InquiryResponseDto(
                 TrackingNumber: "FROM_CACHE",
-                IdempotencyKey: request.IdempotencyKey,
+                IdempotencyKey: idempotencyKey,
                 Status: InquiryStatus.Completed,
                 SuccessfulProvider: "Cache",
                 ResultPayload: cachedPayload,
@@ -55,8 +67,8 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             return ApiResponse<InquiryResponseDto>.Ok(cachedResponse, "پاسخ از طریق کش دریافت شد.");
         }
 
-        // ۳. بررسی Idempotency در دیتابیس برای جلوگیری از رکورد یا پردازش تکراری
-        var existingInquiry = await _repository.GetByIdempotencyKeyAsync(request.IdempotencyKey, cancellationToken);
+        // ۴. بررسی Idempotency در دیتابیس برای جلوگیری از پردازش تکراری
+        var existingInquiry = await _repository.GetByIdempotencyKeyAsync(idempotencyKey, cancellationToken);
         if (existingInquiry != null)
         {
             if (existingInquiry.Status == InquiryStatus.Pending)
@@ -68,11 +80,11 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             return ApiResponse<InquiryResponseDto>.Ok(duplicateResponse, "نتیجه استعلام قبلاً ثبت شده است.");
         }
 
-        // ۴. ایجاد رکورد استعلام با وضعیت Pending در دیتابیس (مدیریت شده در سطح قید یکتا)
+        // ۵. ایجاد رکورد استعلام با وضعیت Pending در دیتابیس
         var newInquiry = new Inquiry
         {
             TrackingNumber = Guid.NewGuid().ToString("N")[..16],
-            IdempotencyKey = request.IdempotencyKey,
+            IdempotencyKey = idempotencyKey,
             IdentityIdentifier = request.IdentityIdentifier,
             InquiryType = request.InquiryType,
             Status = InquiryStatus.Pending,
@@ -81,13 +93,12 @@ public class InquiryOrchestrator : IInquiryOrchestrator
 
         var currentInquiry = await _repository.CreatePendingInquiryAsync(newInquiry, cancellationToken);
 
-        // اگر همزمان ترد دیگری ساخته بود و وضعیتش دیگر Pending نبود
         if (currentInquiry.Status != InquiryStatus.Pending)
         {
             return ApiResponse<InquiryResponseDto>.Ok(MapToDto(currentInquiry, isFromCache: false));
         }
 
-        // ۵. مرتب‌سازی پرووایدرها بر اساس اولویت (عدد کمتر یعنی اولویت بالاتر)
+        // ۶. مرتب‌سازی پرووایدرها بر اساس اولویت
         var orderedProviders = _providers.OrderBy(p => p.Priority).ToList();
         if (!orderedProviders.Any())
         {
@@ -100,7 +111,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
         byte attemptOrder = 1;
         bool isResolved = false;
 
-        // ۶. حلقه Failover روی پرووایدرها
+        // ۷. حلقه Failover روی پرووایدرها
         foreach (var provider in orderedProviders)
         {
             var executionResult = await provider.ExecuteInquiryAsync(
@@ -108,7 +119,6 @@ public class InquiryOrchestrator : IInquiryOrchestrator
                 request.InquiryType,
                 cancellationToken);
 
-            // ثبت تاریخچه تلاش برای این پرووایدر در دیتابیس
             var attemptLog = new InquiryProviderAttempt
             {
                 InquiryId = currentInquiry.Id,
@@ -140,7 +150,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
                 break;
             }
 
-            // سناریو ب: خطای Business (طبق دستور تسک، نباید به پرووایدر بعدی Failover شود)
+            // سناریو ب: خطای Business (توقف چرخه Failover)
             if (executionResult.ErrorType == ProviderErrorType.BusinessError)
             {
                 currentInquiry.Status = InquiryStatus.Failed;
@@ -152,13 +162,12 @@ public class InquiryOrchestrator : IInquiryOrchestrator
                 await _repository.UpdateInquiryStatusAsync(currentInquiry, cancellationToken);
 
                 isResolved = true;
-                break; // زنجیره متوقف می‌شود
+                break;
             }
 
-            // سناریو ج: خطای Technical یا Timeout -> حلقه ادامه می‌یابد تا به پرووایدر بعدی برود (Failover)
+            // سناریو ج: خطای Technical یا Timeout -> انتقال به پرووایدر بعدی
         }
 
-        // ۷. اگر پس از فراخوانی تمام پرووایدرها نتیجه‌ای حاصل نشد
         if (!isResolved)
         {
             currentInquiry.Status = InquiryStatus.Failed;
@@ -172,7 +181,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             ? ApiResponse<InquiryResponseDto>.Ok(finalResponse)
             : ApiResponse<InquiryResponseDto>.Fail(
                 currentInquiry.ErrorMessage ?? "عملیات استعلام ناموفق بود.",
-                [currentInquiry.ErrorMessage ?? string.Empty],
+                new[] { currentInquiry.ErrorMessage ?? string.Empty },
                 finalResponse);
     }
 
