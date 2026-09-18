@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace InquiryService.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/V1/[controller]")]
 public class InquiriesController : ControllerBase
 {
     private readonly IInquiryOrchestrator _orchestrator;
@@ -22,23 +22,14 @@ public class InquiriesController : ControllerBase
     }
 
     /// <summary>
-    /// ثبت و انجام استعلام
+    /// execute an inquiry request.
     /// </summary>
-    /// <param name="idempotencyKey">کلید یکتای درخواست جهت تضمین Idempotency</param>
-    /// <param name="request">اطلاعات بیزینسی استعلام</param>
-    /// <param name="cancellationToken">توکن لغو عملیات</param>
-    [HttpPost]
+    [HttpPost("Get")]
     [ProducesResponseType(typeof(ApiResponse<InquiryResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponse<InquiryResponseDto>), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> ExecuteInquiry(
-        [FromHeader(Name = "Idempotency-Key")][Required] string idempotencyKey,
-        [FromBody] InquiryRequestDto request,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> ExecuteInquiry([FromHeader(Name = "Idempotency-Key")][Required] string idempotencyKey, [FromBody] InquiryRequestDto request, CancellationToken cancellationToken)
     {
-        _logger.LogInformation(
-            "درخواست استعلام جدید دریافت شد. IdempotencyKey: {Key}, Type: {Type}",
-            idempotencyKey,
-            request.InquiryType);
+        _logger.LogInformation("درخواست استعلام جدید دریافت شد. IdempotencyKey: {Key}, Type: {Type}", idempotencyKey, request.InquiryType);
 
         var result = await _orchestrator.ProcessInquiryAsync(idempotencyKey, request, cancellationToken);
 

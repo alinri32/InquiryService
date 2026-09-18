@@ -7,7 +7,7 @@ namespace InquiryService.Infrastructure.Providers;
 public class SecondaryMockProvider : IInquiryProvider
 {
     public string Name => "SecondaryProvider_B";
-    public int Priority => 2; // اولویت دوم (پشتیبان)
+    public int Priority => 2;
 
     public async Task<ProviderExecutionResult> ExecuteInquiryAsync(
         string identityIdentifier,
@@ -16,7 +16,7 @@ public class SecondaryMockProvider : IInquiryProvider
     {
         var stopwatch = Stopwatch.StartNew();
 
-        // اگر حتی پرووایدر دوم هم برای مقادیر بحرانی خطا بدهد
+        // Error simulation for specific identifiers
         if (identityIdentifier == "8888888888")
         {
             await Task.Delay(100, cancellationToken);
@@ -24,7 +24,7 @@ public class SecondaryMockProvider : IInquiryProvider
             return ProviderExecutionResult.TechnicalError("سرویس‌دهنده پشتیبان نیز قادر به پاسخگویی نیست.", (int)stopwatch.ElapsedMilliseconds);
         }
 
-        // پاسخ موفق با سرویس دوم
+        // Simulate a successful response for other identifiers
         await Task.Delay(120, cancellationToken);
         stopwatch.Stop();
         string mockData = $"{{\"provider\":\"{Name}\", \"identifier\":\"{identityIdentifier}\", \"isVerified\":true, \"note\":\"Failover Succeeded\", \"timestamp\":\"{DateTime.UtcNow:O}\"}}";

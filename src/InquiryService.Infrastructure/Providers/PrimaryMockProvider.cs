@@ -19,7 +19,7 @@ public class PrimaryMockProvider : IInquiryProvider
         // Timeout -  Failover
         if (identityIdentifier.StartsWith("999"))
         {
-            await Task.Delay(500, cancellationToken); // شبیه‌سازی زمان انتظار
+            await Task.Delay(500, cancellationToken);
             stopwatch.Stop();
             return ProviderExecutionResult.Timeout((int)stopwatch.ElapsedMilliseconds);
         }
