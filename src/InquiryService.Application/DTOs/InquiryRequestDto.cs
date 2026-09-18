@@ -10,14 +10,14 @@ public record InquiryRequestDto(
         if (string.IsNullOrWhiteSpace(IdentityIdentifier))
             return (false, "شناسه استعلام ( کد ملی / شناسه فرد) الزامی است.");
 
-        if (IdentityIdentifier.Length > 10)
-            return (false, "طول شناسه استعلام نمی‌تواند بیشتر از ۱۰ کاراکتر باشد.");
+        if (IdentityIdentifier.Trim().Length != 10)
+            return (false, "طول شناسه استعلام نمی‌تواند بیشتر یا کمتر از ۱۰ کاراکتر باشد.");
 
         if (string.IsNullOrWhiteSpace(InquiryType))
             return (false, "فیلد InquiryType الزامی است.");
 
-        if (!IsValidIdentityIdentifier(IdentityIdentifier))
-            return (false, "شناسه استعلام نامعتبر است.");
+        if (!IsValidIdentityIdentifier(IdentityIdentifier.Trim()))
+            return (false, "شناسه استعلام ( کد ملی / شناسه فرد) نامعتبر است.");
 
         if (InquiryType.Length > 20)
             return (false, "طول InquiryType نمی‌تواند بیشتر از ۲۰ کاراکتر باشد.");
@@ -27,25 +27,22 @@ public record InquiryRequestDto(
 
     private bool IsValidIdentityIdentifier(string IdentityIdentifier)
     {
-        IdentityIdentifier = IdentityIdentifier.Trim();
-
-        if(IdentityIdentifier.StartsWith("999"))
+        // Check for special cases (for testing purposes)
+        if (IdentityIdentifier.StartsWith("999"))
             return true;
-        if(IdentityIdentifier.StartsWith("888"))
+        if (IdentityIdentifier.StartsWith("888"))
             return true;
-        if(IdentityIdentifier.StartsWith("777"))
+        if (IdentityIdentifier.StartsWith("777"))
             return true;
 
-
-        if (IdentityIdentifier.Length != 10)
-            return false;
-
+        // Check if the identifier is exactly 10 digits
         foreach (char c in IdentityIdentifier)
         {
             if (c < '0' || c > '9')
                 return false;
         }
 
+        // Check if all digits are the same
         bool allSame = true;
         for (int i = 1; i < 10; i++)
         {
@@ -58,6 +55,7 @@ public record InquiryRequestDto(
         if (allSame)
             return false;
 
+        // Calculate the checksum
         int sum = 0;
         for (int i = 0; i < 9; i++)
         {
@@ -68,6 +66,7 @@ public record InquiryRequestDto(
         int remainder = sum % 11;
         int checkDigit = IdentityIdentifier[9] - '0';
 
+        // Return
         if (remainder < 2)
             return checkDigit == remainder;
         else

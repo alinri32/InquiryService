@@ -5,17 +5,17 @@ namespace InquiryService.Application.Contracts.Providers;
 public interface IInquiryProvider
 {
     /// <summary>
-    /// نام پرووایدر جهت لاگ و ثبت در دیتابیس
+    /// Provider name (e.g., "ProviderA", "ProviderB", etc.)
     /// </summary>
     string Name { get; }
 
     /// <summary>
-    /// اولویت پرووایدر (عدد کمتر به معنی اولویت بالاتر است، مثلاً ۱ قبل از ۲ اجرا می‌شود)
+    /// Provider priority (lower number indicates higher priority, e.g., 1 before 2)
     /// </summary>
     int Priority { get; }
 
     /// <summary>
-    /// اجرای استعلام با پشتیبانی از CancellationToken جهت مدیریت Timeout
+    /// Execute inquiry with CancellationToken support for timeout management
     /// </summary>
     Task<ProviderExecutionResult> ExecuteInquiryAsync(
         string identityIdentifier,

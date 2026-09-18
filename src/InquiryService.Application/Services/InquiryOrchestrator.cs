@@ -30,25 +30,24 @@ public class InquiryOrchestrator : IInquiryOrchestrator
         InquiryRequestDto request,
         CancellationToken cancellationToken = default)
     {
-        // ۱. اعتبارسنجی کلید ارسال‌شده در هدر
+        // check header Idempotency-Key
         if (string.IsNullOrWhiteSpace(idempotencyKey))
         {
             return ApiResponse<InquiryResponseDto>.Fail("هدر 'Idempotency-Key' الزامی است.");
         }
-
         if (idempotencyKey.Length > 64)
         {
             return ApiResponse<InquiryResponseDto>.Fail("طول 'Idempotency-Key' نمی‌تواند بیشتر از ۶۴ کاراکتر باشد.");
         }
 
-        // ۲. اعتبارسنجی بدنه درخواست
+        // Input validation
         var (isValid, validationError) = request.Validate();
         if (!isValid)
         {
             return ApiResponse<InquiryResponseDto>.Fail(validationError!);
         }
 
-        // ۳. بررسی کلید کش بیزینسی بر اساس مشخصه استعلام
+        // cache
         string cacheKey = $"inquiry:{request.InquiryType}:{request.IdentityIdentifier}";
         var cachedPayload = await _cacheService.GetAsync(cacheKey, request.BypassCache);
         if (cachedPayload != null)
@@ -67,7 +66,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             return ApiResponse<InquiryResponseDto>.Ok(cachedResponse, "پاسخ از طریق کش دریافت شد.");
         }
 
-        // ۴. بررسی Idempotency در دیتابیس برای جلوگیری از پردازش تکراری
+        // duplicate request check
         var existingInquiry = await _repository.GetByIdempotencyKeyAsync(idempotencyKey, cancellationToken);
         if (existingInquiry != null)
         {
@@ -80,7 +79,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             return ApiResponse<InquiryResponseDto>.Ok(duplicateResponse, "نتیجه استعلام قبلاً ثبت شده است.");
         }
 
-        // ۵. ایجاد رکورد استعلام با وضعیت Pending در دیتابیس
+        // insert new inquiry
         var newInquiry = new Inquiry
         {
             TrackingNumber = Guid.NewGuid().ToString("N")[..16],
@@ -98,7 +97,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             return ApiResponse<InquiryResponseDto>.Ok(MapToDto(currentInquiry, isFromCache: false));
         }
 
-        // ۶. مرتب‌سازی پرووایدرها بر اساس اولویت
+        // sort providers by priority
         var orderedProviders = _providers.OrderBy(p => p.Priority).ToList();
         if (!orderedProviders.Any())
         {
@@ -111,7 +110,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
         byte attemptOrder = 1;
         bool isResolved = false;
 
-        // ۷. حلقه Failover روی پرووایدرها
+        // sequentially execute providers based on priority
         foreach (var provider in orderedProviders)
         {
             var executionResult = await provider.ExecuteInquiryAsync(
@@ -134,7 +133,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             };
             await _repository.AddProviderAttemptAsync(attemptLog, cancellationToken);
 
-            // سناریو الف: پاسخ موفق
+            // success scenario: provider returned a successful response
             if (executionResult.IsSuccess)
             {
                 currentInquiry.Status = InquiryStatus.Completed;
@@ -150,7 +149,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
                 break;
             }
 
-            // سناریو ب: خطای Business (توقف چرخه Failover)
+            // business error scenario: provider returned a business error (e.g., invalid input, not found)
             if (executionResult.ErrorType == ProviderErrorType.BusinessError)
             {
                 currentInquiry.Status = InquiryStatus.Failed;
@@ -164,10 +163,9 @@ public class InquiryOrchestrator : IInquiryOrchestrator
                 isResolved = true;
                 break;
             }
-
-            // سناریو ج: خطای Technical یا Timeout -> انتقال به پرووایدر بعدی
         }
 
+        // All Failed scenario: All providers failed due to technical errors or timeouts
         if (!isResolved)
         {
             currentInquiry.Status = InquiryStatus.Failed;
@@ -176,6 +174,7 @@ public class InquiryOrchestrator : IInquiryOrchestrator
             await _repository.UpdateInquiryStatusAsync(currentInquiry, cancellationToken);
         }
 
+        // Return the final response based on the inquiry status
         var finalResponse = MapToDto(currentInquiry, isFromCache: false);
         return currentInquiry.Status == InquiryStatus.Completed
             ? ApiResponse<InquiryResponseDto>.Ok(finalResponse)

@@ -16,8 +16,6 @@ public class InquiryOrchestratorTests
     private readonly Mock<IInquiryCacheService> _cacheServiceMock;
     private readonly Mock<IInquiryProvider> _provider1Mock;
     private readonly Mock<IInquiryProvider> _provider2Mock;
-
-    // این شناسه فرمول اعتبارسنجی DTO شما را پاس می‌کند
     private const string ValidId = "0010000003";
 
     public InquiryOrchestratorTests()
