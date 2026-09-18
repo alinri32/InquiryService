@@ -1,5 +1,5 @@
 <Solution>
-  <Folder Name="/Solution Items/">
+  <Folder Name="/sql/">
     <File Path="sql/InquiryDb.sql" />
   </Folder>
   <Folder Name="/src/">

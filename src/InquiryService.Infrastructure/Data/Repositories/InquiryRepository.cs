@@ -2,7 +2,6 @@
 using InquiryService.Application.Contracts.Infrastructure;
 using InquiryService.Domain.Entities;
 using Microsoft.Data.SqlClient;
-using System.Data;
 
 namespace InquiryService.Infrastructure.Data.Repositories;
 
@@ -19,10 +18,22 @@ public class InquiryRepository : IInquiryRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         const string sql = @"
-            SELECT Id, TrackingNumber, IdempotencyKey, IdentityIdentifier, InquiryType, 
-                   Status, SuccessfulProvider, ResultPayload, ErrorMessage, CreatedAt, CompletedAt
-            FROM dbo.Inquiries WITH (NOLOCK)
-            WHERE IdempotencyKey = @Key;";
+            SELECT 
+                Id,
+                TrackingNumber,
+                IdempotencyKey,
+                IdentityIdentifier,
+                InquiryType, 
+                Status,
+                SuccessfulProvider,
+                ResultPayload,
+                ErrorMessage,
+                CreatedAt,
+                CompletedAt
+            FROM 
+                dbo.Inquiries WITH (NOLOCK)
+            WHERE 
+                IdempotencyKey = @Key";
 
         var command = new CommandDefinition(sql, new { Key = idempotencyKey }, cancellationToken: cancellationToken);
         return await connection.QuerySingleOrDefaultAsync<Inquiry>(command);
@@ -32,21 +43,37 @@ public class InquiryRepository : IInquiryRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         const string insertSql = @"
-            INSERT INTO dbo.Inquiries 
-            (
-                TrackingNumber, IdempotencyKey, IdentityIdentifier, 
-                InquiryType, Status, CreatedAt
-            )
+            INSERT INTO 
+                dbo.Inquiries 
+                (
+                    TrackingNumber,
+                    IdempotencyKey,
+                    IdentityIdentifier, 
+                    InquiryType,
+                    Status,
+                    CreatedAt
+                )
             OUTPUT 
-                INSERTED.Id, INSERTED.TrackingNumber, INSERTED.IdempotencyKey, 
-                INSERTED.IdentityIdentifier, INSERTED.InquiryType, INSERTED.Status, 
-                INSERTED.SuccessfulProvider, INSERTED.ResultPayload, INSERTED.ErrorMessage, 
-                INSERTED.CreatedAt, INSERTED.CompletedAt
+                INSERTED.Id,
+                INSERTED.TrackingNumber,
+                INSERTED.IdempotencyKey, 
+                INSERTED.IdentityIdentifier,
+                INSERTED.InquiryType,
+                INSERTED.Status, 
+                INSERTED.SuccessfulProvider,
+                INSERTED.ResultPayload,
+                INSERTED.ErrorMessage, 
+                INSERTED.CreatedAt,
+                INSERTED.CompletedAt
             VALUES 
             (
-                @TrackingNumber, @IdempotencyKey, @IdentityIdentifier, 
-                @InquiryType, @Status, SYSUTCDATETIME()
-            );";
+                @TrackingNumber,
+                @IdempotencyKey,
+                @IdentityIdentifier, 
+                @InquiryType,
+                @Status,
+                SYSUTCDATETIME()
+            )";
 
         try
         {
@@ -63,7 +90,7 @@ public class InquiryRepository : IInquiryRepository
         }
         catch (SqlException ex) when (ex.Number == 2601 || ex.Number == 2627)
         {
-            // در صورت بروز Race Condition، رکوردی که ترِد رقیب ایجاد کرده را می‌خوانیم
+            // race condition: another request with the same idempotency key was processed concurrently
             var existing = await GetByIdempotencyKeyAsync(inquiry.IdempotencyKey, cancellationToken);
             if (existing != null)
             {
@@ -78,13 +105,16 @@ public class InquiryRepository : IInquiryRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         const string updateSql = @"
-            UPDATE dbo.Inquiries
-            SET Status = @Status,
+            UPDATE 
+                dbo.Inquiries
+            SET 
+                Status = @Status,
                 SuccessfulProvider = @SuccessfulProvider,
                 ResultPayload = @ResultPayload,
                 ErrorMessage = @ErrorMessage,
                 CompletedAt = SYSUTCDATETIME()
-            WHERE Id = @Id;";
+            WHERE
+                Id = @Id";
 
         var command = new CommandDefinition(updateSql, new
         {
@@ -102,18 +132,33 @@ public class InquiryRepository : IInquiryRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         const string insertSql = @"
-            INSERT INTO dbo.InquiryProviderAttempts
-            (
-                InquiryId, ProviderName, ExecutionOrder, IsSuccess, 
-                ErrorType, HttpStatusCode, RequestPayload, ResponsePayload, 
-                DurationMs, AttemptedAt
-            )
-            VALUES
-            (
-                @InquiryId, @ProviderName, @ExecutionOrder, @IsSuccess, 
-                @ErrorType, @HttpStatusCode, @RequestPayload, @ResponsePayload, 
-                @DurationMs, SYSUTCDATETIME()
-            );";
+            INSERT INTO 
+                dbo.InquiryProviderAttempts
+                (
+                    InquiryId,
+                    ProviderName,
+                    ExecutionOrder,
+                    IsSuccess,
+                    ErrorType,
+                    HttpStatusCode,
+                    RequestPayload,
+                    ResponsePayload, 
+                    DurationMs,
+                    AttemptedAt
+                )
+                VALUES
+                (
+                    @InquiryId,
+                    @ProviderName,
+                    @ExecutionOrder, 
+                    @IsSuccess, 
+                    @ErrorType, 
+                    @HttpStatusCode, 
+                    @RequestPayload, 
+                    @ResponsePayload, 
+                    @DurationMs, 
+                    SYSUTCDATETIME()
+                )";
 
         var command = new CommandDefinition(insertSql, new
         {
@@ -135,15 +180,26 @@ public class InquiryRepository : IInquiryRepository
     {
         using var connection = _connectionFactory.CreateConnection();
         const string sql = @"
-            SELECT Id, InquiryId, ProviderName, ExecutionOrder, IsSuccess, 
-                   ErrorType, HttpStatusCode, RequestPayload, ResponsePayload, 
-                   DurationMs, AttemptedAt
-            FROM dbo.InquiryProviderAttempts
-            WHERE InquiryId = @InquiryId
-            ORDER BY ExecutionOrder ASC;";
+            SELECT 
+                Id,
+                InquiryId, 
+                ProviderName, 
+                ExecutionOrder, 
+                IsSuccess, 
+                ErrorType,
+                HttpStatusCode, 
+                RequestPayload, ResponsePayload, 
+                DurationMs, 
+                AttemptedAt
+            FROM
+                dbo.InquiryProviderAttempts
+            WHERE
+                InquiryId = @InquiryId
+            ORDER BY
+                ExecutionOrder ASC;";
 
         var command = new CommandDefinition(sql, new { InquiryId = inquiryId }, cancellationToken: cancellationToken);
         var result = await connection.QueryAsync<InquiryProviderAttempt>(command);
-        return result.ToList();
+        return [.. result];
     }
 }
