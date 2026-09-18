@@ -7,7 +7,7 @@ namespace InquiryService.Infrastructure.Providers;
 public class PrimaryMockProvider : IInquiryProvider
 {
     public string Name => "PrimaryProvider_A";
-    public int Priority => 1; // اولویت اول
+    public int Priority => 1;
 
     public async Task<ProviderExecutionResult> ExecuteInquiryAsync(
         string identityIdentifier,
@@ -16,7 +16,7 @@ public class PrimaryMockProvider : IInquiryProvider
     {
         var stopwatch = Stopwatch.StartNew();
 
-        // ۱. سناریوی شبیه‌سازی Timeout
+        // Timeout -  Failover
         if (identityIdentifier.StartsWith("999"))
         {
             await Task.Delay(500, cancellationToken); // شبیه‌سازی زمان انتظار
@@ -24,7 +24,7 @@ public class PrimaryMockProvider : IInquiryProvider
             return ProviderExecutionResult.Timeout((int)stopwatch.ElapsedMilliseconds);
         }
 
-        // ۲. سناریوی خطای فنی (Technical Error - باعث Failover می‌شود)
+        // Technical Error -  Failover
         if (identityIdentifier.StartsWith("888"))
         {
             await Task.Delay(100, cancellationToken);
@@ -32,7 +32,7 @@ public class PrimaryMockProvider : IInquiryProvider
             return ProviderExecutionResult.TechnicalError("سرویس‌دهنده اصلی موقتاً از دسترس خارج است (500).", (int)stopwatch.ElapsedMilliseconds);
         }
 
-        // ۳. سناریوی خطای Business (نباید Failover رخ دهد)
+        // Business Error
         if (identityIdentifier.StartsWith("777"))
         {
             await Task.Delay(50, cancellationToken);
@@ -40,7 +40,7 @@ public class PrimaryMockProvider : IInquiryProvider
             return ProviderExecutionResult.BusinessError("کد ملی استعلام‌شده در سامانه یافت نشد.", null, (int)stopwatch.ElapsedMilliseconds);
         }
 
-        // ۴. پاسخ موفقیت‌آمیز
+        // Success
         await Task.Delay(80, cancellationToken);
         stopwatch.Stop();
         string mockData = $"{{\"provider\":\"{Name}\", \"identifier\":\"{identityIdentifier}\", \"isVerified\":true, \"timestamp\":\"{DateTime.UtcNow:O}\"}}";
